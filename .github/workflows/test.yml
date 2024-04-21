@@ -27,3 +27,5 @@ jobs:
         run: go build
       - name: Run tests
         run: go test ./... -v -covermode=count
+      - name: Run binary test
+        run: ./ilo_exporter --version

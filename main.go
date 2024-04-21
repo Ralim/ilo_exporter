@@ -30,7 +30,8 @@ const version string = "1.0.2"
 var (
 	showVersion              = flag.Bool("version", false, "Print version information.")
 	listenAddress            = flag.String("web.listen-address", ":9545", "Address on which to expose metrics and web interface.")
-	metricsPath              = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
+	systemMetricsPath        = flag.String("web.system-telemetry-path", "/metrics_system", "Path under which to expose metrics for system.")
+	chassisMetricsPath       = flag.String("web.chassis-telemetry-path", "/metrics_chassis", "Path under which to expose metrics for metrics.")
 	username                 = flag.String("api.username", "", "Username")
 	password                 = flag.String("api.password", "", "Password")
 	maxConcurrentRequests    = flag.Uint("api.max-concurrent-requests", 4, "Maximum number of requests sent against API concurrently")
@@ -87,15 +88,17 @@ func startServer() {
 			<h1>iLO Exporter by Mauve Mailorder Software</h1>
 			<h2>Example</h2>
 			<p>Metrics for host 172.16.0.200</p>
-			<p><a href="` + *metricsPath + `?host=172.16.0.200">` + r.Host + *metricsPath + `?host=172.16.0.200</a></p>
+			<p><a href="` + *systemMetricsPath + `?host=172.16.0.200">` + r.Host + *systemMetricsPath + `?host=172.16.0.200</a></p>
+			<p><a href="` + *chassisMetricsPath + `?host=172.16.0.200">` + r.Host + *chassisMetricsPath + `?host=172.16.0.200</a></p>
 			<h2>More information</h2>
 			<p><a href="https://github.com/MauveSoftware/ilo_exporter">github.com/MauveSoftware/ilo_exporter</a></p>
 			</body>
 			</html>`))
 	})
-	http.HandleFunc(*metricsPath, errorHandler(handleMetricsRequest))
+	http.HandleFunc(*systemMetricsPath, errorHandler(handleMetricsSystemRequest))
+	http.HandleFunc(*chassisMetricsPath, errorHandler(handleMetricsChassisRequest))
 
-	logrus.Infof("Listening for %s on %s (TLS: %v)", *metricsPath, *listenAddress, *tlsEnabled)
+	logrus.Infof("Listening for %s & %s; on %s (TLS: %v)", *systemMetricsPath, *chassisMetricsPath, *listenAddress, *tlsEnabled)
 	if *tlsEnabled {
 		logrus.Fatal(http.ListenAndServeTLS(*listenAddress, *tlsCertChainPath, *tlsKeyPath, nil))
 		return
@@ -115,7 +118,33 @@ func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.Handler
 	}
 }
 
-func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
+func handleMetricsChassisRequest(w http.ResponseWriter, r *http.Request) error {
+	host := r.URL.Query().Get("host")
+
+	ctx, span := tracer.Start(r.Context(), "HandleMetricsRequest", trace.WithAttributes(
+		attribute.String("host", host),
+	))
+	defer span.End()
+
+	if host == "" {
+		return fmt.Errorf("no host defined")
+	}
+
+	reg := prometheus.NewRegistry()
+
+	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))
+
+	l := logrus.New()
+	l.Level = logrus.ErrorLevel
+
+	promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		ErrorLog:      l,
+		ErrorHandling: promhttp.ContinueOnError}).ServeHTTP(w, r)
+	return nil
+}
+
+func handleMetricsSystemRequest(w http.ResponseWriter, r *http.Request) error {
 	host := r.URL.Query().Get("host")
 
 	ctx, span := tracer.Start(r.Context(), "HandleMetricsRequest", trace.WithAttributes(
@@ -132,7 +161,6 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
 	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
-	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))
 
 	l := logrus.New()
 	l.Level = logrus.ErrorLevel

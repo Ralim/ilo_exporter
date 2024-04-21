@@ -1,27 +1,28 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/mauvesoftware/ilo_exporter)](https://goreportcard.com/report/github.com/mauvesoftware/ilo_exporter)
-
 # ilo_exporter
 
-Metrics exporter for HP iLO to prometheus
+[![Go Report Card](https://goreportcard.com/badge/github.com/ralim/ilo_exporter)](https://goreportcard.com/report/github.com/ralim/ilo_exporter)
 
-## Breaking changes
+Metrics exporter for HP iLO to prometheus.
+This is forked from the version by MauveSoftware.
 
-Beginning with version 1.0.0 the projects ilo4_exporter and ilo5_exporter were merged to ilo_exporter. Due to this change metric names are based on ilo5_exporter but were renamed to show compatiblity to both versions.
+Changes from the fork:
+
+- Metrics endpoints split into two {Chassis,System} to allow fetching at different update rates
+- Port change to `9545` from the document `19545`
+- Docker image builds for `x86_64` and `aarch64`
 
 ## Install
 
-```
-go get -u github.com/MauveSoftware/ilo_exporter
+```bash
+go get -u github.com/ralim/ilo_exporter
 ```
 
 ## Usage
 
 Running the exporter with the following test credentials:
 
-```
-Username: ilo_exporter
-Password: g3tM3trics
-```
+Username: `ilo_exporter`
+Password: `g3tM3trics`
 
 ### Binary
 
@@ -32,18 +33,19 @@ Password: g3tM3trics
 ### Docker
 
 ```bash
-docker run -d --restart always --name ilo_exporter -p 9545:9545 -e API_USERNAME=ilo_exporter -e API_PASSWORD=g3tM3trics mauvesoftware/ilo_exporter
+docker run -d --restart always --name ilo_exporter -p 9545:9545 -e API_USERNAME=ilo_exporter -e API_PASSWORD=g3tM3trics ghcr.io/ralim/ilo_exporter:main
 ```
 
 ## Prometheus configuration
 
-To get metrics for 172.16.0.200 using <https://my-exporter-tld/metrics?hosts=172.16.0.200>
+To get metrics for 172.16.0.200 using <https://my-exporter-tld/metrics_system?hosts=172.16.0.200>
 
 ```bash
   - job_name: 'ilo'
     scrape_interval: 300s
     scrape_timeout: 120s
     scheme: https
+    metrics_path: /metrics_system
     static_configs:
       - targets:
           - 172.16.0.200
@@ -57,6 +59,8 @@ To get metrics for 172.16.0.200 using <https://my-exporter-tld/metrics?hosts=172
         replacement: my-exporter-tld
 ```
 
+This can then be repeated for `metrics_chassis`. Note that chassis metrics are _much_ slower to poll on some systems, so you will need the slow timeout.
+
 ## Grafana
 
 For users of [Grafana](https://grafana.com/), this repository includes an example [dashboard](iLO-grafana-dashboard.json) and example [alert rules](ilo-grafana-alerts.yaml).
@@ -67,4 +71,4 @@ For users of [Grafana](https://grafana.com/), this repository includes an exampl
 
 ## Prometheus
 
-see https://prometheus.io/
+see [Prometheus main site](ttps://prometheus.io/)

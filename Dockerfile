@@ -1,7 +1,8 @@
 FROM golang as builder
 ADD . /go/ilo_exporter/
 WORKDIR /go/ilo_exporter
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/ilo_exporter
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -a -installsuffix cgo -o /go/bin/ilo_exporter
+
 
 FROM alpine:latest
 ENV API_USERNAME ''

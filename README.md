@@ -10,6 +10,8 @@ Changes from the fork:
 - Metrics endpoints split into two {Chassis,System} to allow fetching at different update rates
 - Port change to `9545` from the document `19545`
 - Docker image builds for `x86_64` and `aarch64`
+- Dramatically smaller docker images that just contain the binary
+- Forwards API username/password from the prometheus query so its not in this containers env
 
 ## Install
 
@@ -19,26 +21,25 @@ go get -u github.com/ralim/ilo_exporter
 
 ## Usage
 
-Running the exporter with the following test credentials:
-
-Username: `ilo_exporter`
-Password: `g3tM3trics`
-
 ### Binary
 
 ```bash
-./ilo_exporter -api.username=ilo_exporter -api.password=g3tM3trics
+./ilo_exporter
 ```
 
 ### Docker
 
 ```bash
-docker run -d --restart always --name ilo_exporter -p 9545:9545 -e API_USERNAME=ilo_exporter -e API_PASSWORD=g3tM3trics ghcr.io/ralim/ilo_exporter:main
+docker run -d --restart always --name ilo_exporter -p 9545:9545 ghcr.io/ralim/ilo_exporter:main
 ```
 
 ## Prometheus configuration
 
 To get metrics for 172.16.0.200 using <https://my-exporter-tld/metrics_system?hosts=172.16.0.200>
+With an iLO authentication configured for
+
+Username: `ilo_exporter`
+Password: `g3tM3trics`
 
 ```bash
   - job_name: 'ilo'
@@ -46,6 +47,9 @@ To get metrics for 172.16.0.200 using <https://my-exporter-tld/metrics_system?ho
     scrape_timeout: 120s
     scheme: https
     metrics_path: /metrics_system
+    basic_auth:
+      username: 'ilo_exporter'
+      password: 'g3tM3trics'
     static_configs:
       - targets:
           - 172.16.0.200

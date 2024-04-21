@@ -32,8 +32,6 @@ var (
 	listenAddress            = flag.String("web.listen-address", ":9545", "Address on which to expose metrics and web interface.")
 	systemMetricsPath        = flag.String("web.system-telemetry-path", "/metrics_system", "Path under which to expose metrics for system.")
 	chassisMetricsPath       = flag.String("web.chassis-telemetry-path", "/metrics_chassis", "Path under which to expose metrics for metrics.")
-	username                 = flag.String("api.username", "", "Username")
-	password                 = flag.String("api.password", "", "Password")
 	maxConcurrentRequests    = flag.Uint("api.max-concurrent-requests", 4, "Maximum number of requests sent against API concurrently")
 	tlsEnabled               = flag.Bool("tls.enabled", false, "Enables TLS")
 	tlsCertChainPath         = flag.String("tls.cert-file", "", "Path to TLS cert file")
@@ -74,8 +72,9 @@ func main() {
 func printVersion() {
 	fmt.Println("ilo_exporter")
 	fmt.Printf("Version: %s\n", version)
-	fmt.Println("Author(s): Daniel Czerwonk")
+	fmt.Println("Author(s): Daniel Czerwonk, Ben Brown")
 	fmt.Println("Copyright: 2022, Mauve Mailorder Software GmbH & Co. KG, Licensed under MIT license")
+	fmt.Println("Updated fork by Ralim <Ben Brown>")
 	fmt.Println("Metric exporter for HP iLO")
 }
 
@@ -97,6 +96,7 @@ func startServer() {
 	})
 	http.HandleFunc(*systemMetricsPath, errorHandler(handleMetricsSystemRequest))
 	http.HandleFunc(*chassisMetricsPath, errorHandler(handleMetricsChassisRequest))
+	http.HandleFunc("/health", errorHandler(handleHealthCheck))
 
 	logrus.Infof("Listening for %s & %s; on %s (TLS: %v)", *systemMetricsPath, *chassisMetricsPath, *listenAddress, *tlsEnabled)
 	if *tlsEnabled {
@@ -118,6 +118,12 @@ func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.Handler
 	}
 }
 
+// Healthcheck endpoint, to check app started OK
+func handleHealthCheck(w http.ResponseWriter, r *http.Request) error {
+	w.WriteHeader(http.StatusOK)
+	return nil
+}
+
 func handleMetricsChassisRequest(w http.ResponseWriter, r *http.Request) error {
 	host := r.URL.Query().Get("host")
 
@@ -131,8 +137,12 @@ func handleMetricsChassisRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	reg := prometheus.NewRegistry()
-
-	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	}
+	cl := client.NewClient(host, username, password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
 	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))
 
 	l := logrus.New()
@@ -157,8 +167,12 @@ func handleMetricsSystemRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	reg := prometheus.NewRegistry()
-
-	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil
+	}
+	cl := client.NewClient(host, username, password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
 	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
 
